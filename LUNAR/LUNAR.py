@@ -42,6 +42,7 @@ class BaseParser:
         to_path_logs = os.path.join(self.dir_out, f"{log_name}_{self.data_type}.log_structured.csv")
         df_to_save = self.clusters.prepare_save_df()
         df_to_save.to_csv(to_path_logs, index=False)
+        print(f"Saved {log_name}_log_structured.csv to {to_path_logs}")
 
         to_path_templates = os.path.join(self.dir_out, f"{log_name}_{self.data_type}.log_templates.csv")
         df_templates = df_to_save.loc[:, ['EventId', 'EventTemplate']].drop_duplicates()
@@ -50,6 +51,7 @@ class BaseParser:
         df_selected_sorted = df_selected_sorted.drop('EventId_numeric', axis=1)
 
         df_selected_sorted.to_csv(to_path_templates, index=False)
+        print(f"Saved {log_name}_log_templates.csv to {to_path_templates}")
 
         # save intermediate results
         if self.write_intermediate:
@@ -136,7 +138,7 @@ class LUNARParser(BaseParser):
     def parse(self, logName):
         log_path = os.path.join(self.dir_in, f"{logName}_{self.data_type}.log_structured.csv")
         print('Parsing file: ' + log_path)
-        self.clusters.load_data(pd.read_csv(log_path))
+        self.clusters.load_data(pd.read_csv(log_path), log_path)
         logs_grouped = self.clusters.clustering()
         self.initialize_template_database()
 
@@ -173,7 +175,7 @@ class LUNARParser(BaseParser):
     def parse_parallel(self, logName):
         log_path = os.path.join(self.dir_in, f"{logName}_{self.data_type}.log_structured.csv")
         print('Parsing file: ' + log_path)
-        self.clusters.load_data(pd.read_csv(log_path))
+        self.clusters.load_data(pd.read_csv(log_path), log_path)
         logs_grouped = self.clusters.clustering()
 
         n_iter = 0

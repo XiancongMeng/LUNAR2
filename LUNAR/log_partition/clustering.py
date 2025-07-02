@@ -16,6 +16,7 @@ class BaseClustering:
                  lcu_lamb=0.5, lcu_sample_size=3, sample_size_auto="fixed", add_regex="add", regex=[],
                  add_skip_sim=False, pad_query=True):
         self.df_logs = None
+        self.log_path = None
         self.num_total_logs = 0
         self.num_processed_logs = 0
         self.add_regex = add_regex
@@ -44,8 +45,9 @@ class BaseClustering:
         self.update_map_parent2child = {}
         self.update_map_child2parent = {}
 
-    def load_data(self, df_logs):
+    def load_data(self, df_logs, log_path):
         print("Clustering load data")
+        self.log_path = log_path
         self.df_logs = df_logs
         if self.add_regex == "before":
             print("Clustering add regex before preprocess")
@@ -82,6 +84,8 @@ class BaseClustering:
 
     def prepare_save_df(self):
         self.df_logs.assign(NewEventId="")
+        self.original_df_logs = pd.read_csv(self.log_path)
+        print(f"Original df_logs: {self.original_df_logs.shape}, Clustering df_logs: {self.df_logs.shape}")
         templates_set = []
         for i, row in self.df_logs.iterrows():
             if row['Template'] in templates_set:
@@ -91,6 +95,8 @@ class BaseClustering:
                 template_id = len(templates_set)
             self.df_logs.loc[i, 'NewEventId'] = f"E{template_id}"
         df = self.df_logs[["LineId", "Content", "NewEventId", "Template"]]
+        # assign the row "Content" of original df_logs to df
+        df["Content"] = self.original_df_logs["Content"]
         df.columns = ["LineId", "Content", "EventId", "EventTemplate"]
         return df
 
