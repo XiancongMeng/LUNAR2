@@ -24,7 +24,7 @@ pip install -r requirements.txt
 ### Step 3: Add openai API key and base url
 Add your openai API key and base url by updating line 195 in `./LUNAR/config.py` file
 ```python
-LLM_BASE_MAPPING = {
+LLM_BASE_MAPPING={
     "gpt35": ["gpt-3.5-turbo-0125", "API_BASE_URL", "API_KEY"],
 }
 ```
@@ -53,19 +53,19 @@ bash run_lunar.sh all
 # 3. LUNAR-Parallel
 You can also run an efficient version LUNAR-Parallel with the following steps:
 
-##### Step 1: Add openai API key and base url
+### Step 1: Add openai API key and base url
 Add your openai API key and base url by updating line 18-19 in `main_parallel.py` file
 ```python
-API_KEY = "sk-API_KEY"
-BASE_URL = "API_BASE_URL"
+API_KEY="sk-API_KEY"
+BASE_URL="API_BASE_URL"
 ```
 
-##### Step 2: Run with example Apache dataset
+### Step 2: Run with example Apache dataset
 ```commandline
 bash run_lunar_parallel.sh Apache
 ```
 
-##### Step 2: Run with Loghub-2.0
+### Step 3: Run with Loghub-2.0
 After you download the Loghub-2.0 datasets, you can use the following scripts to evaluate on all datasets
 ```commandline
 bash run_lunar_parallel.sh all
@@ -81,10 +81,20 @@ If you find our work useful, please consider citing our paper:
 
 ```
 @article{huang2024lunar,
-  title={LUNAR: Unsupervised LLM-based Log Parsing},
-  author={Huang, Junjie and Jiang, Zhihan and Chen, Zhuangbin and Lyu, Michael R},
-  journal={arXiv preprint arXiv:2406.07174},
-  year={2024}
+    author={Huang, Junjie and Jiang, Zhihan and Chen, Zhuangbin and Lyu, Michael},
+    title={No More Labelled Examples? An Unsupervised Log Parser with LLMs},
+    year={2025},
+    issue_date={July 2025},
+    publisher={Association for Computing Machinery},
+    address={New York, NY, USA},
+    volume={2},
+    number={FSE},
+    url={https://doi-org.easyaccess1.lib.cuhk.edu.hk/10.1145/3729377},
+    doi={10.1145/3729377},
+    journal={Proc. ACM Softw. Eng.},
+    month=jun,
+    articleno={FSE107},
+    numpages={24}
 }
 
 @inproceedings{huang2024demystifying,
