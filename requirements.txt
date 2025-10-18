@@ -12,3 +12,4 @@ scipy
 textdistance==4.5.0
 tqdm
 eventlet
+openai
