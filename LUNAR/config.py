@@ -208,7 +208,9 @@ benchmark_settings = {
 
 
 LLM_BASE_MAPPING = {
-    "gpt35-0125": ["gpt-3.5-turbo-0125", "API_BASE_URL", "API_KEY"],
+    #"gpt35-0125": ["gpt-3.5-turbo-0125", "API_BASE_URL", "API_KEY"],
+    "gpt35-0125": ["Qwen/Qwen3-Coder-30B-A3B-Instruct", "https://api.siliconflow.cn/v1", "sk-asuoigwfjoacuhwehjkbanwbuoutwkdlrxkegqwfnohtglzl"],
+    #"gpt35-0125": ["qwen3-coder", "http://localhost:11434/v1", "ollama"],
 }
 
 
@@ -341,74 +343,74 @@ def load_args():
     return args
 
 
-def load_args_parallel():
-    parser = common_args()
-    parser = parameter_args(parser)
-    args = parser.parse_args()
-    args.parallel = True
-
-    args.model = LLM_BASE_MAPPING[args.llm][0] if args.model == "" else args.model
-    args.base_url = LLM_BASE_MAPPING[args.llm][1] if args.base_url == "" else args.base_url
-    args.api_key = LLM_BASE_MAPPING[args.llm][2] if args.api_key == "" else args.api_key
-    args.llm_params = {
-        "model": args.model,
-        "base_url": args.base_url,
-        "api_key": args.api_key,
-        "dataset": args.test_dataset,
-        "prompt": args.prompt,
-    }
-    args.cluster_params = {
-        "cluster_method": args.cluster_method,
-        "cluster_topk": args.cluster_topk,
-        "min_cluster_size": args.min_cluster_size,
-        "sample_method": args.sample_method,
-        "sample_size": args.sample_size,
-        "sample_min_similarity": args.sample_min_similarity,
-        "add_skip_sim": args.add_skip_sim,
-        "pad_query": not args.not_pad_query,
-        "lcu_lamb": args.lcu_lamb,
-        "lcu_sample_size": args.lcu_sample_size,
-        "sample_size_auto": args.sample_size_auto,
-        "add_regex": args.add_regex,
-        "regex": [],
-        "sample_size_assigned": args.sample_size,
-        "dedup": True,
-    }
-
-    print(f"[PARAM]: pad_query: {args.cluster_params['pad_query']}")
-    print(f"[PARAM]: add_skip_sim: {args.cluster_params['add_skip_sim']}")
-    print(f"[PARAM]: cluster_method: {args.cluster_params['cluster_method']}")
-    print(f"[PARAM]: cluster_topk: {args.cluster_params['cluster_topk']}")
-    print(f"[PARAM]: sample_method: {args.cluster_params['sample_method']}")
-    print(f"[PARAM]: lcu_sample_size: {args.cluster_params['lcu_sample_size']}")
-    print(f"[PARAM]: lcu_lamb: {args.cluster_params['lcu_lamb']}")
-
-    # input dir
-    if args.data_type == "full":
-        args.data_dir = os.path.join(args.base_dir, "./",  "datasets")
-        # args.data_dir = os.path.join(args.base_dir, "./",  "loghub2_correct")
-    else:
-        args.data_dir = os.path.join(args.base_dir, "./",  "2k_dataset")
-    if args.gt_dir == "":
-        args.gt_dir = args.data_dir
-
-    # # output dir
-    args.prefix = "LUNAR-parallel"
-    args.output_dir = os.path.join(args.base_dir, "saved_results", args.prefix)
-    if not os.path.exists(args.output_dir):
-        os.makedirs(args.output_dir)
-    print(f"Save dir: {args.output_dir}")
-
-    if args.data_type == "full":
-        args.otc = False
-    args.verbose = True
-    if args.add_regex == 'add':
-        args.regex = benchmark_settings[args.test_dataset]["regex"]
-    if args.add_regex == 'before':
-        args.regex = benchmark_settings[args.test_dataset]["regex"]
-        args.cluster_params['regex'] = args.regex
-    else:
-        args.regex = []
-
-    return args
+#def load_args_parallel():
+#    parser = common_args()
+#    parser = parameter_args(parser)
+#    args = parser.parse_args()
+#    args.parallel = True
+#
+#    args.model = LLM_BASE_MAPPING[args.llm][0] if args.model == "" else args.model
+#    args.base_url = LLM_BASE_MAPPING[args.llm][1] if args.base_url == "" else args.base_url
+#    args.api_key = LLM_BASE_MAPPING[args.llm][2] if args.api_key == "" else args.api_key
+#    args.llm_params = {
+#        "model": args.model,
+#        "base_url": args.base_url,
+#        "api_key": args.api_key,
+#        "dataset": args.test_dataset,
+#        "prompt": args.prompt,
+#    }
+#    args.cluster_params = {
+#        "cluster_method": args.cluster_method,
+#        "cluster_topk": args.cluster_topk,
+#        "min_cluster_size": args.min_cluster_size,
+#        "sample_method": args.sample_method,
+#        "sample_size": args.sample_size,
+#        "sample_min_similarity": args.sample_min_similarity,
+#        "add_skip_sim": args.add_skip_sim,
+#        "pad_query": not args.not_pad_query,
+#        "lcu_lamb": args.lcu_lamb,
+#        "lcu_sample_size": args.lcu_sample_size,
+#        "sample_size_auto": args.sample_size_auto,
+#        "add_regex": args.add_regex,
+#        "regex": [],
+#        "sample_size_assigned": args.sample_size,
+#        "dedup": True,
+#    }
+#
+#    print(f"[PARAM]: pad_query: {args.cluster_params['pad_query']}")
+#    print(f"[PARAM]: add_skip_sim: {args.cluster_params['add_skip_sim']}")
+#    print(f"[PARAM]: cluster_method: {args.cluster_params['cluster_method']}")
+#    print(f"[PARAM]: cluster_topk: {args.cluster_params['cluster_topk']}")
+#    print(f"[PARAM]: sample_method: {args.cluster_params['sample_method']}")
+#    print(f"[PARAM]: lcu_sample_size: {args.cluster_params['lcu_sample_size']}")
+#    print(f"[PARAM]: lcu_lamb: {args.cluster_params['lcu_lamb']}")
+#
+#    # input dir
+#    if args.data_type == "full":
+#        args.data_dir = os.path.join(args.base_dir, "./",  "datasets")
+#        # args.data_dir = os.path.join(args.base_dir, "./",  "loghub2_correct")
+#    else:
+#        args.data_dir = os.path.join(args.base_dir, "./",  "2k_dataset")
+#    if args.gt_dir == "":
+#        args.gt_dir = args.data_dir
+#
+#    # # output dir
+#    args.prefix = "LUNAR-parallel"
+#    args.output_dir = os.path.join(args.base_dir, "saved_results", args.prefix)
+#    if not os.path.exists(args.output_dir):
+#        os.makedirs(args.output_dir)
+#    print(f"Save dir: {args.output_dir}")
+#
+#    if args.data_type == "full":
+#        args.otc = False
+#    args.verbose = True
+#    if args.add_regex == 'add':
+#        args.regex = benchmark_settings[args.test_dataset]["regex"]
+#    if args.add_regex == 'before':
+#        args.regex = benchmark_settings[args.test_dataset]["regex"]
+#        args.cluster_params['regex'] = args.regex
+#    else:
+#        args.regex = []
+#
+#    return args
 

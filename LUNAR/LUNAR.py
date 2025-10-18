@@ -170,6 +170,8 @@ class LUNARParser(BaseParser):
                              "update_success": update_success,
                              }
                 self.json_inter_result.append(save_item)
+            #print('Testing ends!')
+            #exit(0)
         self.save_results(logName)
 
     def parse_parallel(self, logName):
@@ -211,6 +213,7 @@ class LUNARParser(BaseParser):
 
     def parse_one_iter(self, reparse=False):
         cluster_id, logs_to_query = self.clusters.sample_for_llm()
+        print("cluster_id: {}\nlogs_to_query: {}".format(cluster_id, logs_to_query))
         if self.add_regex == "add":
             logs_to_query_regex = [preprocess_log_for_query(log, self.regex) for log in logs_to_query]
         else:

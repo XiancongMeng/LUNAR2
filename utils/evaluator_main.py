@@ -4,6 +4,7 @@ import csv
 import sys
 import pandas as pd
 import numpy as np
+from pathlib import Path
 sys.path.append("../")
 
 from .common import correct_templates_and_update_files
@@ -170,6 +171,7 @@ def post_average(metric_file, output_path):
     mean_row = df.select_dtypes(include=[np.number]).mean().round(3)
     new_row = pd.DataFrame([['Average']], columns=['Dataset']).join(pd.DataFrame([mean_row.values], columns=mean_row.index))
     df = pd.concat([df, new_row], ignore_index=True)
+    Path(output_path).parent.mkdir(parents=True, exist_ok=True)
     df.to_csv(output_path, index=False)
     df = pd.read_csv(output_path)
     transposed_df = df.transpose()

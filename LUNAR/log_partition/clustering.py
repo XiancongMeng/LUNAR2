@@ -49,11 +49,15 @@ class BaseClustering:
         print("Clustering load data")
         self.log_path = log_path
         self.df_logs = df_logs
+        # debug
+        print('self.add_regex: {}'.format(self.add_regex))
+        print('self.regex: {}'.format(self.regex))
         if self.add_regex == "before":
             print("Clustering add regex before preprocess")
             self.df_logs.loc[:, "Content"] = self.df_logs.apply(lambda row: preprocess_log_for_query(row["Content"], self.regex), axis=1)
 
         self.df_logs = self.df_logs.assign(Template="")
+        print('self.df_logs.iloc[23]:\n{}'.format(self.df_logs.iloc[23]))
         self.num_total_logs = len(self.df_logs)
         self.num_processed_logs = 0
 
@@ -268,26 +272,39 @@ class BaseClustering:
             self.clustering()
         # Strategy: always sample the largest cluster
         max_cluster_id = max(self.clusters, key=lambda k: len(self.clusters[k]))
+        # debug
+        #max_cluster_id = 12
+
         self.current_logs_bucket_id = max_cluster_id
         self.current_logs_bucket = self.clusters[self.current_logs_bucket_id]
         print(f"Sample {self.sample_size} from current logs bucket: ID: {self.current_logs_bucket_id}, Len: {self.current_logs_bucket['length'].iloc[0]}, Bucket Size: {len(self.current_logs_bucket)}, Total Buckets: {len(self.clusters)}", )
+        # debug
+        #self.clusters[4].to_csv('cluster-4.csv', index=False)
+        #exit(0)
 
         if len(self.current_logs_bucket) == 0:
+            print('A')
             self.clusters.pop(self.current_logs_bucket_id)
             cluster_id, sampled = self.sample_by_lcu_sampling(dedup=dedup)
             return cluster_id, sampled
         elif len(self.current_logs_bucket) == 1:
+            print('B')
             logs = self.current_logs_bucket["Content"].tolist()
             cluster_id = self.current_logs_bucket["cid2"].iloc[0]
             return cluster_id, sampling_from_list(logs, 1, padding=self.pad_query)
         else:
+            print('C')
             anchor_log, candidate_logs = self.anchor_log_selection(self.current_logs_bucket["Content"].tolist(),
                                                                    method="first")
+            print("len(candidate_logs): {}".format(len(candidate_logs)))
+            print("self.sample_size_auto: {}".format(self.sample_size_auto))
             if self.sample_size_auto:
                 length_this_bucket = self.current_logs_bucket["length"].iloc[0]
                 self.sample_size = compute_adaptive_sample_size(length_this_bucket, anchor_log, self.sample_size_assigned)
+                print("self.sample_size: {}".format(self.sample_size))
             if dedup:
                 candidate_logs = remove_duplicates(candidate_logs)
+                print("len(candidate_logs): {}".format(len(candidate_logs)))
             cluster_id = self.current_logs_bucket["cid2"].iloc[0]
             sampled = sampling_from_sorted_list(anchor_log, candidate_logs, self.sample_size-1,
                                                 lcu_lamb=self.lcu_lamb, lcu_sample_size=self.lcu_sample_size,
@@ -339,123 +356,123 @@ class BaseClustering:
             return logs[0], logs[1:]
 
 
-class TopKTokenClusteringParallel(BaseClustering):
-    """ Very similar to Drain with a depth 5"""
-
-    def __init__(self, sample_method="lcu_sampling", sample_size=3, cluster_topk=3, min_cluster_size=100, sample_min_similarity=0.5,
-                 lcu_lamb=0.5, lcu_sample_size=3, sample_size_auto="fixed", add_regex="add", regex=[],
-                 add_skip_sim=False, pad_query=True):
-        super(TopKTokenClusteringParallel, self).__init__(sample_method, sample_size,
-                                                  min_cluster_size=min_cluster_size,
-                                                  sample_min_similarity=sample_min_similarity,
-                                                  lcu_lamb=lcu_lamb,
-                                                  lcu_sample_size=lcu_sample_size,
-                                                  sample_size_auto=sample_size_auto,
-                                                  add_regex=add_regex,
-                                                  regex=regex,
-                                                  add_skip_sim=add_skip_sim,
-                                                  pad_query=pad_query)
-        self.cluster_topk = cluster_topk
-        self.token_frequency = Counter()
-        self.vocab = Vocab()
-
-    def represent(self):
-        self.df_logs["length"] = self.df_logs["Content"].apply(get_tokens_length)
-        self.log_lengths = self.df_logs["length"].tolist()
-        # self.vocab.build(self.df_logs["Content"].tolist())
-
-    def clustering(self):
-        if len(self.log_lengths) == 0:
-            self.represent()
-        df_logs = self.df_logs[self.df_logs["Template"] == ""]
-        grouped = df_logs.groupby("length").groups
-        self.max_log_length, self.min_log_length = max(grouped.keys()), min(grouped.keys())
-
-        # Cluster by log length
-        _bucket_to_merge = {}
-        for idx, key in enumerate(sorted(grouped.keys())):
-            this_bucket = self.df_logs.iloc[grouped[key]]
-            _bucket_to_merge[idx] = this_bucket
-        self.clusters = _bucket_to_merge
-        print(f"Clustering by log length: {len(self.clusters)}")
-        print(f"Clustering by log length: {[len(i) for i in self.clusters.values()]}")
-
-        # Cluster by top-k tokens
-        flat_clusters = {}
-        for idx, cluster in self.clusters.items():
-            _clusters = self.clustering_by_topk_tokens(cluster)
-            cid2 = len(flat_clusters)
-            for i, df in enumerate(_clusters):
-                df.loc[:, "cid1"] = [idx] * len(df)
-                df.loc[:, "cid2"] = [cid2+i] * len(df)
-            for child_idx in range(len(flat_clusters), len(flat_clusters)+len(_clusters)):
-                self.update_map_child2parent[child_idx] = idx
-            self.update_map_parent2child[idx] = list(range(len(flat_clusters), len(flat_clusters)+len(_clusters)))
-            for _clus in _clusters:
-                flat_clusters[len(flat_clusters)] = _clus
-            # print(f"- Clustering by content similarity (group-{idx}): {len(_clusters)}")
-            a = 1
-        print(f"Clustering (min_cluster_size={self.min_cluster_size}) by length and 1st 3 tokens: {len(flat_clusters)} clusters")
-        self.clusters = flat_clusters
-
-        # Merge small clusters
-        print(f"Clustering results: {[len(i) for i in self.clusters.values()]}")
-
-        return self.clusters
-
-    def sample_for_llm(self, buckets=None):
-        if not buckets:
-            return self.sample_by_lcu_sampling(dedup=True)
-        else:
-            return self.sample_by_lcu_sampling_parallel(buckets, dedup=True)
-
-    def clustering_by_topk_tokens(self, log_df):
-        clusters = []
-        vocab = Vocab()
-        vocab.build(log_df["Content"].tolist())
-
-        topk_map_rows = {}
-        for rid, row in log_df.iterrows():
-            topk = vocab.topk_tokens(row["Content"], self.cluster_topk)
-            if topk in topk_map_rows:
-                topk_map_rows[topk].append(row)
-            else:
-                topk_map_rows[topk] = [row]
-
-        n_topk = self.cluster_topk
-        while len(topk_map_rows) > 0:
-            topk_tokens = list(topk_map_rows.keys())
-            map_long_to_short = {toks: toks[:n_topk] for i, toks in enumerate(topk_tokens)}
-
-            cluster_map = {}
-            for toks_long in topk_tokens:
-                tok_short = map_long_to_short[toks_long]
-                if tok_short in cluster_map:
-                    cluster_map[tok_short].append(toks_long)
-                else:
-                    cluster_map[tok_short] = [toks_long]
-
-            a=0
-            for toks_short, toks_longs in cluster_map.items():
-                grouping_rows = [topk_map_rows[toks_long] for toks_long in toks_longs]
-                grouping_rows = [j for i in grouping_rows for j in i]
-                if len(grouping_rows) < self.min_cluster_size:
-                    continue
-                else:
-                    clusters.append(pd.DataFrame(grouping_rows))
-                    for toks_long in toks_longs:
-                        del topk_map_rows[toks_long]
-
-            n_topk = n_topk - 1
-            if n_topk == 0 and len(topk_map_rows) > 0:
-                merged_row = pd.DataFrame([line for lines in topk_map_rows.values() for line in lines])
-                clusters.append(merged_row)
-                break
-        size_min = min([len(i) for i in clusters]) if len(clusters) > 0 else 0
-        size_max = max([len(i) for i in clusters]) if len(clusters) > 0 else 0
-        print(f"--- Finished 2nd Level Clustering by top-{self.cluster_topk} tokens: {len(clusters)} clusters, "
-              f"Total/Min/Max: {len(log_df)}/{size_min}/{size_max} Logs. Last cluster logs: {len(clusters[-1])}")
-        return clusters
+#class TopKTokenClusteringParallel(BaseClustering):
+#    """ Very similar to Drain with a depth 5"""
+#
+#    def __init__(self, sample_method="lcu_sampling", sample_size=3, cluster_topk=3, min_cluster_size=100, sample_min_similarity=0.5,
+#                 lcu_lamb=0.5, lcu_sample_size=3, sample_size_auto="fixed", add_regex="add", regex=[],
+#                 add_skip_sim=False, pad_query=True):
+#        super(TopKTokenClusteringParallel, self).__init__(sample_method, sample_size,
+#                                                  min_cluster_size=min_cluster_size,
+#                                                  sample_min_similarity=sample_min_similarity,
+#                                                  lcu_lamb=lcu_lamb,
+#                                                  lcu_sample_size=lcu_sample_size,
+#                                                  sample_size_auto=sample_size_auto,
+#                                                  add_regex=add_regex,
+#                                                  regex=regex,
+#                                                  add_skip_sim=add_skip_sim,
+#                                                  pad_query=pad_query)
+#        self.cluster_topk = cluster_topk
+#        self.token_frequency = Counter()
+#        self.vocab = Vocab()
+#
+#    def represent(self):
+#        self.df_logs["length"] = self.df_logs["Content"].apply(get_tokens_length)
+#        self.log_lengths = self.df_logs["length"].tolist()
+#        # self.vocab.build(self.df_logs["Content"].tolist())
+#
+#    def clustering(self):
+#        if len(self.log_lengths) == 0:
+#            self.represent()
+#        df_logs = self.df_logs[self.df_logs["Template"] == ""]
+#        grouped = df_logs.groupby("length").groups
+#        self.max_log_length, self.min_log_length = max(grouped.keys()), min(grouped.keys())
+#
+#        # Cluster by log length
+#        _bucket_to_merge = {}
+#        for idx, key in enumerate(sorted(grouped.keys())):
+#            this_bucket = self.df_logs.iloc[grouped[key]]
+#            _bucket_to_merge[idx] = this_bucket
+#        self.clusters = _bucket_to_merge
+#        print(f"Clustering by log length: {len(self.clusters)}")
+#        print(f"Clustering by log length: {[len(i) for i in self.clusters.values()]}")
+#
+#        # Cluster by top-k tokens
+#        flat_clusters = {}
+#        for idx, cluster in self.clusters.items():
+#            _clusters = self.clustering_by_topk_tokens(cluster)
+#            cid2 = len(flat_clusters)
+#            for i, df in enumerate(_clusters):
+#                df.loc[:, "cid1"] = [idx] * len(df)
+#                df.loc[:, "cid2"] = [cid2+i] * len(df)
+#            for child_idx in range(len(flat_clusters), len(flat_clusters)+len(_clusters)):
+#                self.update_map_child2parent[child_idx] = idx
+#            self.update_map_parent2child[idx] = list(range(len(flat_clusters), len(flat_clusters)+len(_clusters)))
+#            for _clus in _clusters:
+#                flat_clusters[len(flat_clusters)] = _clus
+#            # print(f"- Clustering by content similarity (group-{idx}): {len(_clusters)}")
+#            a = 1
+#        print(f"Clustering (min_cluster_size={self.min_cluster_size}) by length and 1st 3 tokens: {len(flat_clusters)} clusters")
+#        self.clusters = flat_clusters
+#
+#        # Merge small clusters
+#        print(f"Clustering results: {[len(i) for i in self.clusters.values()]}")
+#
+#        return self.clusters
+#
+#    def sample_for_llm(self, buckets=None):
+#        if not buckets:
+#            return self.sample_by_lcu_sampling(dedup=True)
+#        else:
+#            return self.sample_by_lcu_sampling_parallel(buckets, dedup=True)
+#
+#    def clustering_by_topk_tokens(self, log_df):
+#        clusters = []
+#        vocab = Vocab()
+#        vocab.build(log_df["Content"].tolist())
+#
+#        topk_map_rows = {}
+#        for rid, row in log_df.iterrows():
+#            topk = vocab.topk_tokens(row["Content"], self.cluster_topk)
+#            if topk in topk_map_rows:
+#                topk_map_rows[topk].append(row)
+#            else:
+#                topk_map_rows[topk] = [row]
+#
+#        n_topk = self.cluster_topk
+#        while len(topk_map_rows) > 0:
+#            topk_tokens = list(topk_map_rows.keys())
+#            map_long_to_short = {toks: toks[:n_topk] for i, toks in enumerate(topk_tokens)}
+#
+#            cluster_map = {}
+#            for toks_long in topk_tokens:
+#                tok_short = map_long_to_short[toks_long]
+#                if tok_short in cluster_map:
+#                    cluster_map[tok_short].append(toks_long)
+#                else:
+#                    cluster_map[tok_short] = [toks_long]
+#
+#            a=0
+#            for toks_short, toks_longs in cluster_map.items():
+#                grouping_rows = [topk_map_rows[toks_long] for toks_long in toks_longs]
+#                grouping_rows = [j for i in grouping_rows for j in i]
+#                if len(grouping_rows) < self.min_cluster_size:
+#                    continue
+#                else:
+#                    clusters.append(pd.DataFrame(grouping_rows))
+#                    for toks_long in toks_longs:
+#                        del topk_map_rows[toks_long]
+#
+#            n_topk = n_topk - 1
+#            if n_topk == 0 and len(topk_map_rows) > 0:
+#                merged_row = pd.DataFrame([line for lines in topk_map_rows.values() for line in lines])
+#                clusters.append(merged_row)
+#                break
+#        size_min = min([len(i) for i in clusters]) if len(clusters) > 0 else 0
+#        size_max = max([len(i) for i in clusters]) if len(clusters) > 0 else 0
+#        print(f"--- Finished 2nd Level Clustering by top-{self.cluster_topk} tokens: {len(clusters)} clusters, "
+#              f"Total/Min/Max: {len(log_df)}/{size_min}/{size_max} Logs. Last cluster logs: {len(clusters[-1])}")
+#        return clusters
 
 
 class TopKTokenClustering(BaseClustering):
@@ -498,6 +515,9 @@ class TopKTokenClustering(BaseClustering):
         self.clusters = _bucket_to_merge
         print(f"Clustering by log length: {len(self.clusters)}")
         print(f"Clustering by log length: {[len(i) for i in self.clusters.values()]}")
+        #print(self.clusters.keys())
+        #print(type(self.clusters[0]))
+        #exit(0)
 
         # Cluster by top-k tokens
         flat_clusters = {}
@@ -513,7 +533,6 @@ class TopKTokenClustering(BaseClustering):
             for _clus in _clusters:
                 flat_clusters[len(flat_clusters)] = _clus
             # print(f"- Clustering by content similarity (group-{idx}): {len(_clusters)}")
-            a = 1
         print(f"Clustering (min_cluster_size={self.min_cluster_size}) by length and 1st 3 tokens: {len(flat_clusters)} clusters")
         self.clusters = flat_clusters
 
@@ -711,6 +730,7 @@ def sampling_from_sorted_list(anchor_log, candidate_logs, sample_size, add_skip_
     if sample_size <= 0:
         return [anchor_log]
 
+    print("within sampling_from_sorted_list, len(candidate_logs): {}".format(len(candidate_logs)))
     # compute similarities
     similarities = calculate_jaccard_one_to_many(anchor_log, candidate_logs)
     zipped = list(zip(similarities, candidate_logs))
@@ -746,15 +766,24 @@ def sampling_from_sorted_list(anchor_log, candidate_logs, sample_size, add_skip_
     max_sim = max(similarity_counter.keys())
     max_sim_log = sim2logs[max_sim][0] if len(sim2logs[max_sim]) > 0 else ""
     print(f"Sampling from {len(zipped)} logs, Sim Level: {len(sim2logs)}, MaxSim to anchor: {max_sim:.4f}. Anchor: `{anchor_log}`, MaxSim Log: `{max_sim_log}`.")
-    if max_sim >= min_sim_threshold:
-        zipped = [(sim, log) for sim, log in zipped if sim >= min_sim_threshold]
-        for val in similarity_counter.keys():
-            if val < min_sim_threshold:
-                del sim2logs[val]
-        if len(sim2logs) == 0:
+    if False:
+    #if True:
+        if max_sim >= min_sim_threshold:
+            zipped = [(sim, log) for sim, log in zipped if sim >= min_sim_threshold]
+            for val in similarity_counter.keys():
+                if val < min_sim_threshold:
+                    del sim2logs[val]
+            if len(sim2logs) == 0:
+                return [anchor_log]
+        else:
             return [anchor_log]
     else:
-        return [anchor_log]
+        # debug - start
+        sorted_keys = sorted(zipped, key=lambda k: k[0])
+        x_extracted = [k[1] for k in sorted_keys[:lcu_sample_size]]
+        print(x_extracted)
+        return [anchor_log] + x_extracted
+        # debug - end
     
     # LCU sampling:
     log_pools = [random.sample(_logs, min(lcu_sample_size, len(_logs))) for _sim, _logs in sim2logs.items()]
