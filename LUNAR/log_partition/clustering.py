@@ -297,11 +297,14 @@ class BaseClustering:
             anchor_log, candidate_logs = self.anchor_log_selection(self.current_logs_bucket["Content"].tolist(),
                                                                    method="first")
             print("len(candidate_logs): {}".format(len(candidate_logs)))
-            print("self.sample_size_auto: {}".format(self.sample_size_auto))
+            #print("self.sample_size_auto: {}".format(self.sample_size_auto))
+            print("self.sample_size: {}".format(self.sample_size))
             if self.sample_size_auto:
                 length_this_bucket = self.current_logs_bucket["length"].iloc[0]
                 self.sample_size = compute_adaptive_sample_size(length_this_bucket, anchor_log, self.sample_size_assigned)
                 print("self.sample_size: {}".format(self.sample_size))
+            # debug
+            self.sample_size = max(3, self.sample_size)
             if dedup:
                 candidate_logs = remove_duplicates(candidate_logs)
                 print("len(candidate_logs): {}".format(len(candidate_logs)))
@@ -511,6 +514,11 @@ class TopKTokenClustering(BaseClustering):
         _bucket_to_merge = {}
         for idx, key in enumerate(sorted(grouped.keys())):
             this_bucket = self.df_logs.iloc[grouped[key]]
+            # debug
+            #if key == 3:
+            #    print(this_bucket)
+            #    print(idx)
+            #    exit(0)
             _bucket_to_merge[idx] = this_bucket
         self.clusters = _bucket_to_merge
         print(f"Clustering by log length: {len(self.clusters)}")
@@ -522,7 +530,14 @@ class TopKTokenClustering(BaseClustering):
         # Cluster by top-k tokens
         flat_clusters = {}
         for idx, cluster in self.clusters.items():
-            _clusters = self.clustering_by_topk_tokens(cluster)
+            #_clusters = self.clustering_by_topk_tokens(cluster)
+            _clusters = self.brain_cluster(cluster)
+            if idx == 2:
+                # debug
+                for _ in _clusters:
+                    print('#' * 50)
+                    print(_["Content"].drop_duplicates())
+                #exit(0)
             cid2 = len(flat_clusters)
             for i, df in enumerate(_clusters):
                 df.loc[:, "cid1"] = [idx] * len(df)
@@ -543,6 +558,119 @@ class TopKTokenClustering(BaseClustering):
 
     def sample_for_llm(self):
         return self.sample_by_lcu_sampling(dedup=True)
+
+    def brain_cluster(self, df):
+        # 1. Split "Content" into tokens
+        token_lists = df["Content"].str.split()
+
+        # Assert same token length
+        lengths = token_lists.str.len()
+        assert lengths.nunique() == 1, "All rows must have same number of tokens"
+
+        # 2. Build token matrix for ALL rows (original df)
+        token_df = pd.DataFrame(token_lists.tolist())
+
+        # 3. Build token matrix for UNIQUE Content only (for frequency computation)
+        unique_content = df["Content"].drop_duplicates()
+        # debug
+        t = lengths.iloc[0]
+        if False and t == 3:
+            print('here')
+            print(len(unique_content))
+            print(unique_content)
+        unique_token_lists = unique_content.str.split()
+        unique_token_df = pd.DataFrame(unique_token_lists.tolist())
+
+        # 4. Compute column-wise token frequencies ONLY on unique rows
+        freq_lookup = {}
+        for col in unique_token_df.columns:
+            freq_lookup[col] = unique_token_df[col].value_counts().to_dict()
+            #freq_lookup[col] = token_df[col].value_counts().to_dict()
+
+        # 5. Map frequencies back to ALL rows (including duplicates)
+        freq_df = pd.DataFrame({
+            col: token_df[col].map(freq_lookup[col]) for col in token_df.columns
+        })
+        if False and t == 3:
+            x_df = pd.DataFrame({
+                col: unique_token_df[col].map(freq_lookup[col]) for col in token_df.columns
+            })
+            freq_df = x_df
+            print(x_df)
+
+        # 6. For each row (in original df), compute the feature tokens
+        features = []
+        for i, row in freq_df.iterrows():
+            freqs = row.tolist()
+            # most common frequency value
+            #most_common_freq = Counter(freqs).most_common(1)[0][0]
+            if True:
+                freq_counts = Counter(freqs)
+                max_count = max(freq_counts.values())
+                tied_freqs = [f for f, c in freq_counts.items() if c == max_count]
+                most_common_freq = max(tied_freqs)
+                if most_common_freq == 1:
+                    most_common_freq = max(freqs)
+            if False and t == 3:
+                print(freqs)
+                print(most_common_freq)
+            # select tokens whose freq == most_common_freq
+            tokens = [
+                token_df.iloc[i, j] for j, f in enumerate(freqs) if f == most_common_freq
+            ]
+            features.append(tuple(tokens))  # tuple makes it hashable for grouping
+
+        # 7. Attach feature to df
+        #if t == 3: exit(0)
+        df = df.copy()
+        df["_feature"] = features
+
+        # 8. Split df by identical features
+        grouped_dfs = [group.drop(columns="_feature") for _, group in df.groupby("_feature")]
+
+        return grouped_dfs
+
+    #def brain_cluster(self, df):
+    #    # 1. Split "Content" into tokens
+    #    token_lists = df["Content"].str.split()
+    #    #print('debug')
+    #    #for _ in token_lists[:10]:
+    #    #    print(_)
+    #    #print("len(token_lists): {}".format(len(token_lists)))
+    #    # Assert same token length
+    #    lengths = token_lists.str.len()
+    #    assert lengths.nunique() == 1, "All rows must have same number of tokens"
+    #    n_cols = lengths.iloc[0]
+    #    # 2. Build token matrix
+    #    token_df = pd.DataFrame(token_lists.tolist())
+    #    # 3. Compute column-wise token frequencies
+    #    freq_df = pd.DataFrame({
+    #        col: token_df[col].map(token_df[col].value_counts()) for col in token_df.columns
+    #    })
+    #    #print(token_df)
+    #    #print(freq_df)
+    #    # 4. For each row, compute the feature tokens
+    #    features = []
+    #    for i, row in freq_df.iterrows():
+    #        freqs = row.tolist()
+    #        # most common frequency value
+    #        most_common_freq = Counter(freqs).most_common(1)[0][0]
+    #        # select tokens whose freq == most_common_freq
+    #        tokens = [
+    #            token_df.iloc[i, j] for j, f in enumerate(freqs) if f == most_common_freq
+    #        ]
+    #        features.append(tuple(tokens))  # tuple makes it hashable for grouping
+    #    # Attach feature to df
+    #    df = df.copy()
+    #    df["_feature"] = features
+    #    #print(df)
+    #    # 5. Split df by identical features
+    #    grouped_dfs = [group.drop(columns="_feature") for _, group in df.groupby("_feature")]
+    #    #for idx, _ in enumerate(grouped_dfs):
+    #    #    print('group_{}'.format(idx))
+    #    #    print(_)
+    #    #exit(0)
+    #    return grouped_dfs
 
     def clustering_by_topk_tokens(self, log_df, verbose=False):
         clusters = []
@@ -744,7 +872,8 @@ def sampling_from_sorted_list(anchor_log, candidate_logs, sample_size, add_skip_
     if remove_same and 1.0 in similarity_counter.keys():
         zipped = [(sim, log) for sim, log in zipped if sim != 1.0]
         del similarity_counter[1.0]
-    if add_skip_sim:
+    #if add_skip_sim:
+    if False:
         skip_sim_threshold = 0.33
         zipped = [(sim, log) for sim, log in zipped if sim >= skip_sim_threshold]
         to_remove = [val for val in similarity_counter.keys() if val < skip_sim_threshold]
@@ -766,8 +895,8 @@ def sampling_from_sorted_list(anchor_log, candidate_logs, sample_size, add_skip_
     max_sim = max(similarity_counter.keys())
     max_sim_log = sim2logs[max_sim][0] if len(sim2logs[max_sim]) > 0 else ""
     print(f"Sampling from {len(zipped)} logs, Sim Level: {len(sim2logs)}, MaxSim to anchor: {max_sim:.4f}. Anchor: `{anchor_log}`, MaxSim Log: `{max_sim_log}`.")
-    if False:
-    #if True:
+    #if False:
+    if True:
         if max_sim >= min_sim_threshold:
             zipped = [(sim, log) for sim, log in zipped if sim >= min_sim_threshold]
             for val in similarity_counter.keys():
@@ -779,7 +908,7 @@ def sampling_from_sorted_list(anchor_log, candidate_logs, sample_size, add_skip_
             return [anchor_log]
     else:
         # debug - start
-        sorted_keys = sorted(zipped, key=lambda k: k[0])
+        sorted_keys = sorted(zipped, key=lambda k: k[0])#, reverse=True)
         x_extracted = [k[1] for k in sorted_keys[:lcu_sample_size]]
         print(x_extracted)
         return [anchor_log] + x_extracted
