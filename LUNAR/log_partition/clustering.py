@@ -299,22 +299,24 @@ class BaseClustering:
             print("len(candidate_logs): {}".format(len(candidate_logs)))
             #print("self.sample_size_auto: {}".format(self.sample_size_auto))
             print("self.sample_size: {}".format(self.sample_size))
-            if self.sample_size_auto:
-                length_this_bucket = self.current_logs_bucket["length"].iloc[0]
-                self.sample_size = compute_adaptive_sample_size(length_this_bucket, anchor_log, self.sample_size_assigned)
-                print("self.sample_size: {}".format(self.sample_size))
-            # debug
-            self.sample_size = max(3, self.sample_size)
+            if False:
+                if self.sample_size_auto:
+                    length_this_bucket = self.current_logs_bucket["length"].iloc[0]
+                    self.sample_size = compute_adaptive_sample_size(length_this_bucket, anchor_log, self.sample_size_assigned)
+                    print("self.sample_size: {}".format(self.sample_size))
+                # debug
+                self.sample_size = max(3, self.sample_size)
             if dedup:
                 candidate_logs = remove_duplicates(candidate_logs)
                 print("len(candidate_logs): {}".format(len(candidate_logs)))
             cluster_id = self.current_logs_bucket["cid2"].iloc[0]
-            sampled = sampling_from_sorted_list(anchor_log, candidate_logs, self.sample_size-1,
-                                                lcu_lamb=self.lcu_lamb, lcu_sample_size=self.lcu_sample_size,
-                                                add_skip_sim=self.add_skip_sim,
-                                                min_sim_threshold=self.sample_min_similarity, remove_same=True,
-                                                )
 
+            #sampled = sampling_from_sorted_list(anchor_log, candidate_logs, self.sample_size-1,
+            #                                    lcu_lamb=self.lcu_lamb, lcu_sample_size=self.lcu_sample_size,
+            #                                    add_skip_sim=self.add_skip_sim,
+            #                                    min_sim_threshold=self.sample_min_similarity, remove_same=True,
+            #                                    )
+            sampled = candidate_logs[:5]
             return cluster_id, sampled
 
     def sample_by_lcu_sampling_parallel(self, input_clusters, dedup=True):
@@ -895,8 +897,8 @@ def sampling_from_sorted_list(anchor_log, candidate_logs, sample_size, add_skip_
     max_sim = max(similarity_counter.keys())
     max_sim_log = sim2logs[max_sim][0] if len(sim2logs[max_sim]) > 0 else ""
     print(f"Sampling from {len(zipped)} logs, Sim Level: {len(sim2logs)}, MaxSim to anchor: {max_sim:.4f}. Anchor: `{anchor_log}`, MaxSim Log: `{max_sim_log}`.")
-    #if False:
-    if True:
+    if False:
+    #if True:
         if max_sim >= min_sim_threshold:
             zipped = [(sim, log) for sim, log in zipped if sim >= min_sim_threshold]
             for val in similarity_counter.keys():

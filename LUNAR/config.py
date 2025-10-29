@@ -209,9 +209,9 @@ benchmark_settings = {
 
 LLM_BASE_MAPPING = {
     #"gpt35-0125": ["gpt-3.5-turbo-0125", "API_BASE_URL", "API_KEY"],
-    "gpt35-0125": ["Qwen/Qwen3-Coder-30B-A3B-Instruct", "https://api.siliconflow.cn/v1", "sk-asuoigwfjoacuhwehjkbanwbuoutwkdlrxkegqwfnohtglzl"],
+    #"gpt35-0125": ["Qwen/Qwen3-Coder-30B-A3B-Instruct", "https://api.siliconflow.cn/v1", "sk-asuoigwfjoacuhwehjkbanwbuoutwkdlrxkegqwfnohtglzl"],
     #"gpt35-0125": ["qwen3-coder", "http://localhost:11434/v1", "ollama"],
-    #"gpt35-0125": ["deepseek-ai/DeepSeek-V3.2-Exp", "https://api.siliconflow.cn/v1", "sk-vgcyserpqbdsgzchkrvlzzmxaehvrqooxgwebjnqoqmxkpvn"],
+    "gpt35-0125": ["deepseek-ai/DeepSeek-V3.2-Exp", "https://api.siliconflow.cn/v1", "sk-asuoigwfjoacuhwehjkbanwbuoutwkdlrxkegqwfnohtglzl"],
 }
 
 
