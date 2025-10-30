@@ -299,13 +299,15 @@ class BaseClustering:
             print("len(candidate_logs): {}".format(len(candidate_logs)))
             #print("self.sample_size_auto: {}".format(self.sample_size_auto))
             print("self.sample_size: {}".format(self.sample_size))
-            if False:
+            #if False:
+            if True:
                 if self.sample_size_auto:
                     length_this_bucket = self.current_logs_bucket["length"].iloc[0]
-                    self.sample_size = compute_adaptive_sample_size(length_this_bucket, anchor_log, self.sample_size_assigned)
+                    #self.sample_size = compute_adaptive_sample_size(length_this_bucket, anchor_log, self.sample_size_assigned)
+                    self.sample_size = compute_adaptive_sample_size(length_this_bucket, anchor_log, 5)
                     print("self.sample_size: {}".format(self.sample_size))
                 # debug
-                self.sample_size = max(3, self.sample_size)
+                #self.sample_size = max(3, self.sample_size)
             if dedup:
                 candidate_logs = remove_duplicates(candidate_logs)
                 print("len(candidate_logs): {}".format(len(candidate_logs)))
@@ -316,7 +318,7 @@ class BaseClustering:
             #                                    add_skip_sim=self.add_skip_sim,
             #                                    min_sim_threshold=self.sample_min_similarity, remove_same=True,
             #                                    )
-            sampled = candidate_logs[:5]
+            sampled = candidate_logs[:self.sample_size]
             return cluster_id, sampled
 
     def sample_by_lcu_sampling_parallel(self, input_clusters, dedup=True):
@@ -800,7 +802,8 @@ def compute_adaptive_sample_size(length_log, anchor_log, max_size=3, src_size=[1
     with_potential_var = judge_var_log(anchor_log)
     if with_potential_var:
         return max_size
-    elif length_log <= 5:
+    #elif length_log <= 5:
+    elif length_log <= 2:
         return 1
     else:
         return max_size
